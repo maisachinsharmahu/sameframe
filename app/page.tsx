@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Brain, Check, FileImage, FileVideo, FolderOpen, HardDrive, Image as ImageIcon, RotateCcw, Search, ShieldCheck, Sparkles, Trash2, Video } from "lucide-react";
+import { AlertTriangle, Brain, Check, FileImage, FileInput, FileVideo, FolderOpen, HardDrive, Image as ImageIcon, PackageOpen, RotateCcw, Search, ShieldCheck, Sparkles, Video } from "lucide-react";
 import type { DuplicateGroup, MediaFile, ScanProgress, ScanResult, SimilarResult } from "./types";
 
 const EMPTY_PROGRESS: ScanProgress = { phase: "walking", current: 0, total: 0, message: "Preparing scan…" };
@@ -44,8 +44,8 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<"all" | "image" | "video">("all");
   const [keeperByGroup, setKeeperByGroup] = useState<Record<string, string>>({});
-  const [pendingDelete, setPendingDelete] = useState<{ group: DuplicateGroup; file: MediaFile } | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [pendingMove, setPendingMove] = useState<{ type: "one"; group: DuplicateGroup; file: MediaFile } | { type: "all" } | null>(null);
+  const [moving, setMoving] = useState(false);
   const [notice, setNotice] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
 
   useEffect(() => {
@@ -109,23 +109,26 @@ export default function Home() {
     }
   }
 
-  async function confirmDelete() {
-    if (!pendingDelete || !window.sameframe) return;
-    const keeperPath = keeperByGroup[pendingDelete.group.id];
-    setDeleting(true);
+  async function confirmMove() {
+    if (!pendingMove || !result || !window.sameframe) return;
+    const items = pendingMove.type === "one"
+      ? [{ targetPath: pendingMove.file.path, keeperPath: keeperByGroup[pendingMove.group.id], expectedHash: pendingMove.group.hash }]
+      : result.groups.flatMap((group) => group.files.filter((file) => file.path !== keeperByGroup[group.id]).map((file) => ({ targetPath: file.path, keeperPath: keeperByGroup[group.id], expectedHash: group.hash })));
+    setMoving(true);
     try {
-      await window.sameframe.trashFile({ targetPath: pendingDelete.file.path, keeperPath, expectedHash: pendingDelete.group.hash });
-      const reclaimed = pendingDelete.file.size;
+      const response = await window.sameframe.moveDuplicates(items);
+      const movedPaths = new Set(response.moved.map((item) => item.sourcePath));
       setResult((current) => {
         if (!current) return current;
-        const groups = current.groups.map((group) => group.id === pendingDelete.group.id ? { ...group, files: group.files.filter((file) => file.id !== pendingDelete.file.id) } : group).filter((group) => group.files.length > 1);
-        return { ...current, groups, duplicateFiles: Math.max(0, current.duplicateFiles - 1), reclaimableBytes: Math.max(0, current.reclaimableBytes - reclaimed) };
+        const groups = current.groups.map((group) => ({ ...group, files: group.files.filter((file) => !movedPaths.has(file.path)) })).filter((group) => group.files.length > 1);
+        return { ...current, groups, duplicateFiles: groups.reduce((sum, group) => sum + group.files.length - 1, 0), duplicateBytes: groups.reduce((sum, group) => sum + group.size * (group.files.length - 1), 0) };
       });
-      setNotice({ tone: "good", text: `${pendingDelete.file.name} moved to Trash. It can still be restored.` });
-      setPendingDelete(null);
+      const failureNote = response.failed.length ? ` ${response.failed.length} changed or unavailable file(s) were left untouched.` : "";
+      setNotice({ tone: response.moved.length ? "good" : "bad", text: `${response.moved.length} duplicate ${response.moved.length === 1 ? "copy" : "copies"} moved to ${response.archivePath}.${failureNote}` });
+      setPendingMove(null);
     } catch (error) {
-      setNotice({ tone: "bad", text: error instanceof Error ? error.message : "Nothing was deleted." });
-    } finally { setDeleting(false); }
+      setNotice({ tone: "bad", text: error instanceof Error ? error.message : "Nothing was moved." });
+    } finally { setMoving(false); }
   }
 
   const filteredGroups = useMemo(() => {
@@ -165,7 +168,7 @@ export default function Home() {
           <div className="proof-card">
             <div className="proof-orbit"><div className="proof-file left"><ImageIcon size={33} /></div><div className="proof-file right"><ImageIcon size={33} /></div><div className="proof-check"><Check size={28} /></div></div>
             <div className="proof-row"><span>Matching method</span><strong>SHA-256 + byte re-check</strong></div>
-            <div className="proof-row"><span>Deletion method</span><strong>Move to system Trash</strong></div>
+            <div className="proof-row"><span>Cleanup method</span><strong>Move to hidden .duplicates</strong></div>
             <div className="proof-row"><span>Cloud uploads</span><strong>Never</strong></div>
           </div>
         </section>
@@ -182,11 +185,11 @@ export default function Home() {
         <section className="workspace">
           <div className="summary-head">
             <div><div className="eyebrow">SCAN COMPLETE</div><h1>{result.duplicateFiles ? `${result.duplicateFiles} extra ${result.duplicateFiles === 1 ? "copy" : "copies"} found` : "No exact copies found"}</h1><p title={result.root}>{result.root}</p></div>
-            <button className="secondary-button" onClick={() => runScan()}><RotateCcw size={17} /> Scan again</button>
+            <div className="summary-actions">{result.duplicateFiles > 0 && <button className="move-all-button" onClick={() => setPendingMove({ type: "all" })}><PackageOpen size={18} /> Move all duplicates</button>}<button className="secondary-button" onClick={() => runScan()}><RotateCcw size={17} /> Scan again</button></div>
           </div>
 
           <div className="stats-grid">
-            <div className="stat accent"><span>Space recoverable</span><strong>{bytes(result.reclaimableBytes)}</strong></div>
+            <div className="stat accent"><span>Duplicate storage</span><strong>{bytes(result.duplicateBytes)}</strong></div>
             <div className="stat"><span>Duplicate sets</span><strong>{result.groups.length}</strong></div>
             <div className="stat"><span>Media checked</span><strong>{result.mediaFiles.toLocaleString()}</strong></div>
             <div className="stat"><span>Scan time</span><strong>{duration(result.durationMs)}</strong></div>
@@ -218,7 +221,7 @@ export default function Home() {
                         <div className="file-actions">
                           <label className={`keep-choice ${isKeeper ? "selected" : ""}`}><input type="radio" name={`keeper-${group.id}`} checked={isKeeper} onChange={() => setKeeperByGroup((current) => ({ ...current, [group.id]: file.path }))} /><span>{isKeeper ? <Check size={14} /> : null}</span> Keep this copy</label>
                           <button className="reveal" onClick={() => window.sameframe?.revealFile(file.path)}>Show in folder</button>
-                          {!isKeeper && <button className="trash" onClick={() => setPendingDelete({ group, file })}><Trash2 size={15} /> Trash</button>}
+                          {!isKeeper && <button className="move-aside" onClick={() => setPendingMove({ type: "one", group, file })}><FileInput size={15} /> Move aside</button>}
                         </div>
                       </div>
                     </div>;
@@ -231,7 +234,7 @@ export default function Home() {
           <section className="similar-section">
             <div className="similar-intro">
               <div className="similar-icon"><Brain size={26} /></div>
-              <div><div className="eyebrow">OPTIONAL LOCAL AI REVIEW</div><h2>Find edited, compressed or resized copies</h2><p>DINOv3 ViT-B compares photos. V-JEPA 2 ViT-L understands video sequences. Results are suggestions only—AI matches never get a delete button.</p></div>
+              <div><div className="eyebrow">OPTIONAL LOCAL AI REVIEW</div><h2>Find edited, compressed or resized copies</h2><p>DINOv3 ViT-B compares photos. V-JEPA 2 ViT-L understands video sequences. Results are suggestions only—AI matches never get a move action.</p></div>
               <button className="ai-button" onClick={runSimilar}><Sparkles size={18} /> {similarResult ? "Run again" : "Find similar media"}</button>
             </div>
             <div className="thresholds">
@@ -256,13 +259,12 @@ export default function Home() {
 
       {dragging && <div className="drop-overlay"><FolderOpen size={48} /><strong>Drop the folder to scan</strong><span>Subfolders will be included automatically</span></div>}
       {notice && <div className={`notice ${notice.tone}`}><span>{notice.tone === "good" ? <Check size={18} /> : <AlertTriangle size={18} />}</span>{notice.text}<button onClick={() => setNotice(null)}>×</button></div>}
-      {pendingDelete && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !deleting) setPendingDelete(null); }}>
-        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-title">
-          <div className="modal-icon"><Trash2 size={24} /></div><h2 id="delete-title">Move this copy to Trash?</h2>
-          <p>The app will hash both files and compare every byte again immediately before moving anything. If even one byte changed, the action stops.</p>
-          <div className="delete-file"><span>Move</span><strong>{pendingDelete.file.path}</strong></div>
-          <div className="delete-file keep"><span>Keep</span><strong>{keeperByGroup[pendingDelete.group.id]}</strong></div>
-          <div className="modal-actions"><button className="secondary-button" disabled={deleting} onClick={() => setPendingDelete(null)}>Cancel</button><button className="danger-button" disabled={deleting} onClick={confirmDelete}>{deleting ? "Verifying…" : "Verify & move to Trash"}</button></div>
+      {pendingMove && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !moving) setPendingMove(null); }}>
+        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="move-title">
+          <div className="modal-icon"><PackageOpen size={24} /></div><h2 id="move-title">{pendingMove.type === "all" ? `Move all ${result?.duplicateFiles || 0} extra copies?` : "Move this extra copy?"}</h2>
+          <p>Every copy is verified again, then moved inside <strong>{folder}/.duplicates</strong>. Nothing is deleted, and hidden folders are never scanned.</p>
+          {pendingMove.type === "one" ? <><div className="move-file"><span>Move</span><strong>{pendingMove.file.path}</strong></div><div className="move-file keep"><span>Keep</span><strong>{keeperByGroup[pendingMove.group.id]}</strong></div></> : <div className="move-file"><span>Destination</span><strong>{folder}/.duplicates</strong></div>}
+          <div className="modal-actions"><button className="secondary-button" disabled={moving} onClick={() => setPendingMove(null)}>Cancel</button><button className="move-button" disabled={moving} onClick={confirmMove}>{moving ? "Verifying & moving…" : pendingMove.type === "all" ? "Move all verified copies" : "Move verified copy"}</button></div>
         </div>
       </div>}
     </main>

@@ -19,6 +19,7 @@ function isInside(root, candidate) {
 }
 
 async function collectMedia(root, progress, signal) {
+  if (path.resolve(root).split(path.sep).some((segment) => segment.startsWith("."))) throw new Error("Hidden folders are never scanned.");
   const files = [];
   const directories = [root];
   let visited = 0;
@@ -39,7 +40,11 @@ async function collectMedia(root, progress, signal) {
       if (entry.name === ".DS_Store" || entry.name.startsWith("._")) continue;
       const filePath = path.join(directory, entry.name);
       if (entry.isSymbolicLink()) { skipped += 1; continue; }
-      if (entry.isDirectory()) { directories.push(filePath); continue; }
+      if (entry.isDirectory()) {
+        if (entry.name.startsWith(".")) { skipped += 1; continue; }
+        directories.push(filePath);
+        continue;
+      }
       if (!entry.isFile()) continue;
       visited += 1;
       const kind = mediaKind(filePath);
@@ -195,7 +200,7 @@ async function scanFolder(root, progress, signal) {
     .sort((a, b) => (b.size * (b.files.length - 1)) - (a.size * (a.files.length - 1)));
 
   const duplicateFiles = groups.reduce((sum, group) => sum + group.files.length - 1, 0);
-  const reclaimableBytes = groups.reduce((sum, group) => sum + group.size * (group.files.length - 1), 0);
+  const duplicateBytes = groups.reduce((sum, group) => sum + group.size * (group.files.length - 1), 0);
   progress?.({ phase: "done", current: candidates.length, total: candidates.length, message: "Scan complete" });
   return {
     root: resolvedRoot,
@@ -203,7 +208,7 @@ async function scanFolder(root, progress, signal) {
     mediaFiles: collected.files.length,
     skipped: collected.skipped,
     duplicateFiles,
-    reclaimableBytes,
+    duplicateBytes,
     groups,
     durationMs: Date.now() - started,
   };

@@ -24,15 +24,24 @@ test("scanner returns only byte-identical duplicate media", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "sameframe-test-"));
   await mkdir(path.join(root, "phone"));
   await mkdir(path.join(root, "pc"));
+  await mkdir(path.join(root, ".duplicates"));
   await writeFile(path.join(root, "phone", "one.jpg"), "identical-media-bytes");
   await writeFile(path.join(root, "pc", "renamed.jpg"), "identical-media-bytes");
   await writeFile(path.join(root, "pc", "same-size.jpg"), "different-media-contents");
   await writeFile(path.join(root, "pc", "not-media.txt"), "identical-media-bytes");
+  await writeFile(path.join(root, ".duplicates", "hidden-copy.jpg"), "identical-media-bytes");
   const result = await scanFolder(root);
   assert.equal(result.mediaFiles, 3);
   assert.equal(result.groups.length, 1);
   assert.equal(result.groups[0].files.length, 2);
   assert.equal(result.duplicateFiles, 1);
+});
+
+test("scanner refuses a hidden root folder", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "sameframe-hidden-"));
+  const hidden = path.join(parent, ".private-media");
+  await mkdir(hidden);
+  await assert.rejects(() => scanFolder(hidden), /Hidden folders are never scanned/);
 });
 
 test("SHA-256 changes when one byte changes", async () => {

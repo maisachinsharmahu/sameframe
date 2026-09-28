@@ -10,7 +10,7 @@ two honest workflows:
 - **Exact duplicates** are verified with SHA-256 and a literal byte-for-byte
   comparison. These are safe candidates for cleanup.
 - **Similar media** is analyzed locally with vision models and shown only for
-  manual review. AI suggestions never receive a delete button.
+  manual review. AI suggestions never receive a move action.
 
 Sameframe is a local Next.js + Electron desktop app. No account, no telemetry,
 and no media uploads — see [PRIVACY.md](PRIVACY.md).
@@ -18,10 +18,12 @@ and no media uploads — see [PRIVACY.md](PRIVACY.md).
 ## Features
 
 - **Exact photo and video matching** regardless of filename or folder.
-- **Pre-delete verification** — both files are hashed and compared byte by byte
+- **Pre-move verification** — both files are hashed and compared byte by byte
   again immediately before any action.
-- **Recoverable cleanup** — unwanted exact copies go to the operating system
-  Trash, never directly to permanent deletion.
+- **Non-destructive isolation** — unwanted exact copies move into a hidden
+  `.duplicates` folder inside the selected root.
+- **One-click bulk move** — choose one keeper per group, then isolate every
+  verified extra copy together.
 - **Similar-photo review** using DINOv3 ViT-B/16 embeddings.
 - **Similar-video review** using V-JEPA 2 ViT-L over sampled video sequences,
   not just a single thumbnail.
@@ -40,7 +42,12 @@ Sameframe does not use AI to decide whether two files are exact copies.
 4. Compare every byte inside matching-hash groups.
 5. Before cleanup, stat, hash, and byte-compare the kept and unwanted copies
    again.
-6. Abort if anything changed; otherwise move the unwanted copy to Trash.
+6. Abort if anything changed; otherwise preserve its relative path under the
+   selected root's hidden `.duplicates` folder.
+
+Dot-prefixed hidden directories are never scanned. This permanently excludes
+`.duplicates` from future exact and AI scans without maintaining a separate
+ignore database.
 
 Names, timestamps, metadata, thumbnails, and model scores cannot turn a file
 into an exact duplicate.
@@ -109,7 +116,7 @@ Unreadable files and symbolic links are skipped rather than guessed about.
 
 Similarity is not identity. Crops, color changes, repeated scenes, or visually
 similar recordings can produce a high model score. Sameframe therefore keeps
-AI results in a separate review-only area with no deletion action. Use Exact
+AI results in a separate review-only area with no move action. Use Exact
 duplicates for deterministic cleanup.
 
 ## Contributing

@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld("sameframe", {
   pathForFile: (file) => webUtils.getPathForFile(file),
   scanFolder: (folderPath) => ipcRenderer.invoke("scan-folder", folderPath),
   scanSimilar: (folderPath, thresholds) => ipcRenderer.invoke("scan-similar", { folderPath, thresholds }),
-  trashFile: (args) => ipcRenderer.invoke("trash-file", args),
+  moveDuplicates: (items) => ipcRenderer.invoke("move-duplicates", items),
   revealFile: (filePath) => ipcRenderer.invoke("reveal-file", filePath),
   getRuntimeInfo: () => ipcRenderer.invoke("runtime-info"),
   onProgress: (callback) => {

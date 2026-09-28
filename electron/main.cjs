@@ -1,10 +1,10 @@
 const { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } = require("electron");
 const fs = require("node:fs");
-const fsp = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { spawnSync } = require("node:child_process");
-const { filesEqual, isInside, scanFolder, sha256 } = require("./scanner.cjs");
+const { isInside, scanFolder } = require("./scanner.cjs");
+const { moveDuplicates } = require("./archive.cjs");
 const { scanSimilar } = require("./similarity.cjs");
 
 protocol.registerSchemesAsPrivileged([{ scheme: "sameframe-media", privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }]);
@@ -91,16 +91,10 @@ ipcMain.handle("reveal-file", async (_event, filePath) => {
   shell.showItemInFolder(filePath);
 });
 
-ipcMain.handle("trash-file", async (_event, { targetPath, keeperPath, expectedHash }) => {
-  if (!selectedRoot || !isInside(selectedRoot, targetPath) || !isInside(selectedRoot, keeperPath)) throw new Error("File is outside the selected folder.");
-  if (path.resolve(targetPath) === path.resolve(keeperPath)) throw new Error("The kept copy cannot be deleted.");
-  const [targetStat, keeperStat] = await Promise.all([fsp.stat(targetPath), fsp.stat(keeperPath)]);
-  if (!targetStat.isFile() || !keeperStat.isFile() || targetStat.size !== keeperStat.size) throw new Error("Files changed since the scan. Scan again.");
-  const [targetHash, keeperHash] = await Promise.all([sha256(targetPath), sha256(keeperPath)]);
-  if (targetHash !== expectedHash || keeperHash !== expectedHash || targetHash !== keeperHash) throw new Error("Exact-match verification failed. Nothing was deleted.");
-  if (!(await filesEqual(targetPath, keeperPath))) throw new Error("Byte comparison failed. Nothing was deleted.");
-  await shell.trashItem(targetPath);
-  return { ok: true };
+ipcMain.handle("move-duplicates", async (_event, items) => {
+  if (!selectedRoot) throw new Error("Choose and scan a folder first.");
+  if (!Array.isArray(items) || !items.length) throw new Error("No duplicate copies were selected.");
+  return moveDuplicates(selectedRoot, items);
 });
 
 ipcMain.handle("runtime-info", async () => ({

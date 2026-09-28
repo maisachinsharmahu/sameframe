@@ -28,8 +28,9 @@ embeddings and file metadata, not copies of the original media.
 
 Removing Sameframe's application-data directory removes this cache.
 
-## File deletion
+## File isolation
 
-Sameframe moves a user-confirmed exact copy to the operating system Trash. It
-does not permanently erase files. AI similarity suggestions cannot initiate a
-delete operation.
+Sameframe moves user-confirmed exact copies under a hidden `.duplicates` folder
+inside the selected root, preserving their relative folder structure. It does
+not erase them. Hidden folders are excluded from every scan. AI similarity
+suggestions cannot initiate a move operation.

@@ -25,7 +25,7 @@ export type ScanResult = {
   mediaFiles: number;
   skipped: number;
   duplicateFiles: number;
-  reclaimableBytes: number;
+  duplicateBytes: number;
   groups: DuplicateGroup[];
   durationMs: number;
 };
@@ -42,7 +42,7 @@ export type DesktopApi = {
   pathForFile(file: File): string;
   scanFolder(path: string): Promise<ScanResult>;
   scanSimilar(path: string, thresholds: { image: number; video: number }): Promise<SimilarResult>;
-  trashFile(args: { targetPath: string; keeperPath: string; expectedHash: string }): Promise<{ ok: boolean }>;
+  moveDuplicates(items: Array<{ targetPath: string; keeperPath: string; expectedHash: string }>): Promise<{ archivePath: string; moved: Array<{ sourcePath: string; destinationPath: string }>; failed: Array<{ sourcePath: string; error: string }> }>;
   revealFile(path: string): Promise<void>;
   onProgress(callback: (progress: ScanProgress) => void): () => void;
   getRuntimeInfo(): Promise<{ desktop: boolean; platform: string; ffmpeg: boolean; modelReady: boolean; videoModelReady: boolean }>;

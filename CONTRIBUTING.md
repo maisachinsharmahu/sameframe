@@ -16,7 +16,7 @@ AI similarity features, follow the model setup in [README.md](README.md).
 ## Pull requests
 
 1. Keep exact-duplicate logic deterministic. AI or perceptual scores must never
-   authorize deletion.
+   authorize moving files.
 2. Keep media processing local and do not introduce telemetry or uploads.
 3. Add or update tests for scanner, containment, comparison, and similarity
    behavior.
@@ -25,6 +25,6 @@ AI similarity features, follow the model setup in [README.md](README.md).
 
 ## Reporting security issues
 
-Please do not publish exploitable path-containment, deletion, or local-file
+Please do not publish exploitable path-containment, file-moving, or local-file
 access issues before a fix is available. Open a private security advisory from
 the repository's **Security** tab.
