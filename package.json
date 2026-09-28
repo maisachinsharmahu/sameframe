@@ -1,0 +1,70 @@
+{
+  "name": "sameframe",
+  "version": "1.0.0",
+  "author": "Sachin Sharma",
+  "private": true,
+  "description": "A local-first exact image and video duplicate finder",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"next dev -p 3210\" \"wait-on http://127.0.0.1:3210 && cross-env DUPLICATES_DEV_URL=http://127.0.0.1:3210 electron .\"",
+    "dev:web": "next dev -p 3210",
+    "build": "next build",
+    "start": "electron .",
+    "download:model": "node scripts/download-model.mjs",
+    "download:video-model": ".venv-vjepa/bin/python scripts/download-vjepa2.py",
+    "setup:video-runtime": "python3 -m venv .venv-vjepa && .venv-vjepa/bin/pip install torch torchvision transformers av numpy safetensors pillow",
+    "download:models": "npm run download:model && npm run download:video-model",
+    "test": "node --test tests/*.test.mjs",
+    "package:mac": "npm run build && electron-builder --mac dir",
+    "package:win": "npm run build && electron-builder --win dir",
+    "package:linux": "npm run build && electron-builder --linux dir"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.3.0",
+    "lucide-react": "^0.468.0",
+    "next": "16.3.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "44.4.5",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.7.2",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "dev.sachin.sameframe",
+    "productName": "Sameframe",
+    "asar": true,
+    "files": [
+      "out/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "models/dinov3-vitb", "to": "models/dinov3-vitb" },
+      { "from": "models/vjepa2-vitl", "to": "models/vjepa2-vitl" },
+      { "from": ".venv-vjepa", "to": "python-vjepa" },
+      { "from": "electron/vjepa_worker.py", "to": "vjepa_worker.py" }
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "mac": {
+      "target": "dir",
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "portable"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility"
+    }
+  }
+}
